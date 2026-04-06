@@ -38,6 +38,60 @@
             position: fixed;
         }
 
+        /* --- PRELOADER (ФИКСОМАТ) --- */
+        #fixomat-loader {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--bg);
+            z-index: 999999; /* Поверх всего */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1), visibility 0.6s;
+        }
+        
+        .loader-logo-text {
+            font-size: 42px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, #007aff 0%, #00d2ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 25px;
+            animation: pulseLogo 2s infinite alternate ease-in-out;
+        }
+
+        @keyframes pulseLogo {
+            0% { transform: scale(0.98); filter: drop-shadow(0 0 10px rgba(0, 122, 255, 0.3)); }
+            100% { transform: scale(1.02); filter: drop-shadow(0 0 25px rgba(0, 122, 255, 0.6)); }
+        }
+
+        .spinner-ring {
+            width: 40px; height: 40px;
+            border: 4px solid var(--glass-border);
+            border-top-color: var(--apple-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .loader-status {
+            color: var(--text-sec);
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .loader-hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
         /* --- Header --- */
         .header-floating {
             position: fixed; top: 15px; left: 16px; right: 16px; height: 60px;
@@ -77,7 +131,6 @@
         }
         .card.is-selected { border-color: var(--apple-blue); background: linear-gradient(180deg, var(--card-bg) 0%, rgba(0,122,255,0.03) 100%); transform: scale(0.98); }
         .card.status-trauma { animation: shake 0.4s ease; border-color: var(--apple-red) !important; }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
 
         .model-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
         .model-name { font-weight: 800; font-size: 20px; letter-spacing: -0.5px; }
@@ -131,6 +184,12 @@
 </head>
 <body data-theme="dark">
 
+<div id="fixomat-loader">
+    <div class="loader-logo-text">FIXOMAT</div>
+    <div class="spinner-ring"></div>
+    <div class="loader-status" id="loaderStatusText">Синхронизация баз данных...</div>
+</div>
+
 <header class="header-floating">
     <div class="search-row">
         <input type="text" id="searchInput" placeholder="Напр: 13 рм экранчик..." autocomplete="off">
@@ -144,7 +203,8 @@
 <div id="viewport">
     <div id="rubber-wrapper">
         <div id="content-root" style="display: flex; flex-direction: column; gap: 14px;">
-            </div>
+            <div class="empty-state">Введите бренд, модель и деталь<br>База адаптирована к рынку 2026 года</div>
+        </div>
     </div>
 </div>
 
@@ -180,26 +240,43 @@
     // ==========================================
     // 2. ИНИЦИАЛИЗАЦИЯ И СВЯЗЬ С СЕРВЕРОМ
     // ==========================================
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+    }
+
     async function initApp() {
-        const root = document.getElementById('content-root');
-        root.innerHTML = '<div class="empty-state">Синхронизация с базой...<br>Загрузка цен и алгоритмов...</div>';
+        const loader = document.getElementById('fixomat-loader');
+        const statusText = document.getElementById('loaderStatusText');
 
         try {
             const response = await fetch(API_URL);
             const data = await response.json();
             
+            statusText.textContent = 'Обработка прайсов...';
+            
             dictionary = data.dictionary;
             promos = data.promos;
             buildDatabase(data.models, data.basePrices);
             
-            root.innerHTML = '<div class="empty-state">Система готова.<br>Введите бренд, модель и деталь.</div>';
+            // Задержка полсекунды для красоты анимации, затем прячем лоадер
+            setTimeout(() => {
+                loader.classList.add('loader-hidden');
+            }, 500);
+            
+            const debouncedRefresh = debounce(refresh, 250);
             
             document.getElementById('confirmBtn').addEventListener('click', () => { isStrict = true; refresh(); });
-            document.getElementById('searchInput').addEventListener('input', () => { isStrict = false; activeId = null; refresh(); });
-            ['markupInput', 'discountInput', 'promoInput'].forEach(id => document.getElementById(id).addEventListener('input', refresh));
+            document.getElementById('searchInput').addEventListener('input', () => { isStrict = false; activeId = null; debouncedRefresh(); });
+            ['markupInput', 'discountInput', 'promoInput'].forEach(id => document.getElementById(id).addEventListener('input', debouncedRefresh));
 
         } catch (error) {
-            root.innerHTML = '<div class="empty-state" style="color: var(--apple-red);">Ошибка подключения к базе.<br>Проверьте деплой в Google.</div>';
+            statusText.textContent = 'Ошибка подключения!';
+            statusText.style.color = 'var(--apple-red)';
+            document.querySelector('.spinner-ring').style.display = 'none';
             console.error('API Error:', error);
         }
     }
@@ -328,7 +405,10 @@
             return;
         }
 
-        root.innerHTML = filtered.map(i => {
+        const RENDER_LIMIT = 40;
+        const resultsToRender = filtered.slice(0, RENDER_LIMIT);
+
+        let htmlOutput = resultsToRender.map(i => {
             const res = calculate(i, i.id === activeId);
             const old = history.get(i.id) || res.share;
             const diff = res.share - old;
@@ -358,7 +438,16 @@
                 </div>
             `;
         }).join('');
-        
+
+        if (filtered.length > RENDER_LIMIT) {
+            htmlOutput += `<div class="empty-state" style="padding-top: 10px;">
+                Найдено совпадений: <b>${filtered.length}</b>.<br>
+                Показаны первые ${RENDER_LIMIT}.<br>
+                <span style="font-size: 12px; opacity: 0.6;">Уточните запрос, чтобы найти нужное.</span>
+            </div>`;
+        }
+
+        root.innerHTML = htmlOutput;
         updateSubmitButton();
     }
 
@@ -368,7 +457,7 @@
             document.getElementById('discountInput').value = '';
             activeId = id;
         } else activeId = null;
-        refresh();
+        refresh(); 
     };
 
     // ==========================================
@@ -396,7 +485,6 @@
         const d = document.getElementById('discountInput').value || 0;
         const p = document.getElementById('promoInput').value || '';
 
-        // Передаем данные через параметры строки (action=order)
         const params = new URLSearchParams({
             action: 'order',
             brand: selectedItem.brand,
@@ -414,7 +502,6 @@
         submitBtn.textContent = 'Отправка...';
 
         try {
-            // Отправляем как GET-запрос — это обходит 90% ошибок POST
             const response = await fetch(`${API_URL}?${params.toString()}`);
             const result = await response.json();
 
