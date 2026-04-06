@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ULTRA System v7.0 | Partner POS</title>
+    <style>
+        :root {
+            --apple-blue: #007aff;
+            --apple-green: #34c759;
+            --apple-red: #ff3b30;
+            --bg: #000000;
+            --card-bg: #1c1c1e;
+            --text-main: #ffffff;
+            --text-sec: #8e8e93;
+            --glass: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.15);
+        }
+
+        [data-theme="light"] {
+            --bg: #f2f2f7;
+            --card-bg: #ffffff;
+            --text-main: #000000;
+            --text-sec: #8e8e93;
+            --glass: rgba(0, 0, 0, 0.05);
+            --glass-border: rgba(0, 0, 0, 0.1);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            transition: background-color 0.5s ease;
+            overflow: hidden;
+            width: 100vw; height: 100vh;
+            position: fixed;
+        }
+
+        /* --- Header --- */
+        .header-floating {
+            position: fixed; top: 15px; left: 16px; right: 16px; height: 60px;
+            background: var(--glass); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+            z-index: 10000; border-radius: 22px; border: 0.5px solid var(--glass-border);
+            display: flex; align-items: center; padding: 0 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+
+        .search-row { display: flex; gap: 8px; width: 100%; align-items: center; }
+        #searchInput { flex: 1; padding: 10px 14px; border-radius: 14px; border: none; background: rgba(255,255,255,0.06); color: var(--text-main); font-size: 16px; outline: none; min-width: 0; }
+        
+        #confirmBtn { 
+            background: var(--apple-blue); color: white; border: none; border-radius: 12px; 
+            padding: 10px 16px; font-weight: 700; font-size: 13px; flex-shrink: 0; 
+            transition: transform 0.1s; cursor: pointer;
+        }
+        #confirmBtn:active { transform: scale(0.95); opacity: 0.8; }
+        .theme-btn { background: none; border: none; color: var(--text-main); cursor: pointer; padding: 4px; display: flex; }
+
+        /* --- Viewport --- */
+        #viewport {
+            width: 100%; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 95px 16px 300px; 
+        }
+
+        #rubber-wrapper {
+            will-change: transform; display: flex; flex-direction: column; gap: 14px;
+            max-width: 500px; margin: 0 auto;
+        }
+
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--text-sec); font-size: 15px; line-height: 1.4; }
+
+        /* --- Cards --- */
+        .card {
+            background: var(--card-bg); border-radius: 26px; padding: 22px; border: 2px solid transparent;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+        .card.is-selected { border-color: var(--apple-blue); background: linear-gradient(180deg, var(--card-bg) 0%, rgba(0,122,255,0.03) 100%); transform: scale(0.98); }
+        .card.status-trauma { animation: shake 0.4s ease; border-color: var(--apple-red) !important; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+        .model-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+        .model-name { font-weight: 800; font-size: 20px; letter-spacing: -0.5px; }
+        .service-type { color: var(--text-sec); font-size: 14px; font-weight: 400; margin-top: 2px; }
+        
+        .client-box { text-align: right; }
+        .client-label { font-size: 10px; font-weight: 700; color: var(--apple-blue); text-transform: uppercase; margin-bottom: 2px; }
+        .client-price { font-size: 18px; font-weight: 800; transition: color 0.3s; }
+
+        .limits-row { font-size: 11px; color: var(--text-sec); margin-top: 6px; font-weight: 500; }
+
+        .price-footer {
+            margin-top: 18px; padding-top: 14px; border-top: 0.5px solid var(--glass-border);
+            display: flex; justify-content: space-between; align-items: flex-end;
+        }
+
+        .formula { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; color: var(--text-sec); opacity: 0.6; }
+        .profit-display { font-size: 30px; font-weight: 900; letter-spacing: -1px; position: relative; transition: color 0.3s; }
+
+        .status-azart .profit-display { color: var(--apple-green); text-shadow: 0 0 15px rgba(52,199,89,0.2); }
+        .status-trauma .profit-display, .status-trauma .client-price { color: var(--apple-red); }
+
+        .fly-val { position: absolute; top: -25px; right: 0; font-size: 16px; font-weight: 800; pointer-events: none; animation: flyUp 0.8s forwards; }
+        @keyframes flyUp { 0% { opacity: 0; transform: translateY(10px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-45px); } }
+
+        /* --- Footer & Buttons --- */
+        .footer-glass {
+            position: fixed; bottom: 30px; left: 16px; right: 16px;
+            background: var(--glass); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px);
+            border-radius: 26px; padding: 14px; border: 1px solid var(--glass-border);
+            z-index: 10000; max-width: 500px; margin: 0 auto;
+        }
+        .controls-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .controls-grid input { 
+            width: 100%; background: rgba(255,255,255,0.08); border: none; 
+            padding: 14px 4px; border-radius: 16px; text-align: center; 
+            font-size: 14px; font-weight: 700; color: var(--text-main); outline: none; transition: 0.3s;
+        }
+        .controls-grid input.valid-code { background: rgba(52, 199, 89, 0.15); border: 1px solid var(--apple-green); color: var(--apple-green); }
+
+        .submit-btn {
+            width: 100%; margin-top: 12px; padding: 16px; border-radius: 16px; border: none;
+            background: var(--apple-blue); color: white; font-weight: 800; font-size: 16px; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 122, 255, 0.3);
+        }
+        .submit-btn:disabled { background: rgba(142, 142, 147, 0.2); color: var(--text-sec); cursor: not-allowed; box-shadow: none; }
+        .submit-btn:active:not(:disabled) { transform: scale(0.97); }
+        .submit-btn.success { background: var(--apple-green); box-shadow: 0 4px 15px rgba(52, 199, 89, 0.3); }
+    </style>
+</head>
+<body data-theme="dark">
+
+<header class="header-floating">
+    <div class="search-row">
+        <input type="text" id="searchInput" placeholder="Напр: 13 рм экранчик..." autocomplete="off">
+        <button class="theme-btn" id="themeToggle">
+            <svg id="themeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+        <button id="confirmBtn">Найти</button>
+    </div>
+</header>
+
+<div id="viewport">
+    <div id="rubber-wrapper">
+        <div id="content-root" style="display: flex; flex-direction: column; gap: 14px;">
+            </div>
+    </div>
+</div>
+
+<footer class="footer-glass">
+    <div class="controls-grid">
+        <input type="number" id="markupInput" placeholder="+ Нац" inputmode="numeric">
+        <input type="number" id="discountInput" placeholder="- Скид" inputmode="numeric">
+        <input type="text" id="promoInput" placeholder="Промокод" spellcheck="false">
+    </div>
+    <button id="submitOrderBtn" class="submit-btn" disabled>Выберите деталь</button>
+</footer>
+
+<script>
+    // ==========================================
+    // 1. КОНФИГУРАЦИЯ СИСТЕМЫ
+    // ==========================================
+    // ВСТАВЬ СВОЙ URL ИЗ GOOGLE APPS SCRIPT СЮДА:
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwsJhUL9YCTooUWeuTgnaMUESbf4pzsuBVSSXdDxLQUbSa6aEZJhK55dq0RgEViBVVCZQ/exec';
+    
+    const USD_CURRENT = 41.5; 
+    const USD_BASE = 38.0;    
+    const USD = USD_CURRENT / USD_BASE; 
+    const DELIVERY_COST = Math.round((300 * USD) / 10) * 10; 
+
+    let database = [];
+    let dictionary = {};
+    let promos = {};
+    let ignoreWords = ['замена', 'ремонт', 'починить', 'разбил', 'сломал', 'глючит', 'не', 'работает', 'на', 'в', 'для', 'у', 'под', 'сколько', 'стоит', 'цена', 'стоимость', 'прайс', 'гривен', 'грн'];
+
+    let history = new Map();
+    let activeId = null;
+    let isStrict = false;
+
+    // ==========================================
+    // 2. ИНИЦИАЛИЗАЦИЯ И СВЯЗЬ С СЕРВЕРОМ
+    // ==========================================
+    async function initApp() {
+        const root = document.getElementById('content-root');
+        root.innerHTML = '<div class="empty-state">Синхронизация с базой...<br>Загрузка цен и алгоритмов...</div>';
+
+        try {
+            const response = await fetch(API_URL);
+            const data = await response.json();
+            
+            dictionary = data.dictionary;
+            promos = data.promos;
+            buildDatabase(data.models, data.basePrices);
+            
+            root.innerHTML = '<div class="empty-state">Система готова.<br>Введите бренд, модель и деталь.</div>';
+            
+            document.getElementById('confirmBtn').addEventListener('click', () => { isStrict = true; refresh(); });
+            document.getElementById('searchInput').addEventListener('input', () => { isStrict = false; activeId = null; refresh(); });
+            ['markupInput', 'discountInput', 'promoInput'].forEach(id => document.getElementById(id).addEventListener('input', refresh));
+
+        } catch (error) {
+            root.innerHTML = '<div class="empty-state" style="color: var(--apple-red);">Ошибка подключения к базе.<br>Проверьте URL скрипта.</div>';
+            console.error('API Error:', error);
+        }
+    }
+
+    function buildDatabase(modelsData, basePrices) {
+        database = [];
+        modelsData.forEach(phone => {
+            for (const [repairType, qualities] of Object.entries(basePrices)) {
+                for (const [quality, prices] of Object.entries(qualities)) {
+                    
+                    const cp = Math.round((prices[0] * phone.m * USD) / 50) * 50;
+                    const pc = Math.round((prices[1] * phone.m * USD) / 50) * 50;
+                    const totalProfit = cp - pc - DELIVERY_COST;
+                    const safeProfit = totalProfit > 0 ? totalProfit : 0;
+                    
+                    const maxDiscount = Math.floor((safeProfit * 0.4) / 50) * 50; 
+                    const maxMarkup = Math.floor((cp * 0.15) / 50) * 50;
+                    const searchString = `${phone.brand} ${phone.model} ${repairType} ${quality}`.toLowerCase().replace(/[^a-zа-яё0-9\s]/g, '');
+
+                    database.push({
+                        id: `${phone.model}-${repairType}-${quality}`.replace(/\s+/g, '-'),
+                        brand: phone.brand, model: phone.model, repair: repairType, quality: quality,
+                        baseCP: cp, basePC: pc, baseProfit: safeProfit, 
+                        maxM: maxMarkup, maxD: maxDiscount, searchStr: searchString
+                    });
+                }
+            }
+        });
+    }
+
+    // ==========================================
+    // 3. ПОИСК И ЛОГИКА РАСЧЕТОВ
+    // ==========================================
+    function parseQuery(rawQuery) {
+        let query = rawQuery.toLowerCase().replace(/[^a-zа-яё0-9\s]/g, '');
+        let words = query.split(/\s+/).filter(w => w.length > 0);
+        let searchTerms = [];
+
+        words.forEach(word => {
+            if (ignoreWords.includes(word)) return;
+            let term = dictionary[word] || word;
+            if (!searchTerms.includes(term)) searchTerms.push(term);
+        });
+
+        const joinTerms = (arr, t1, t2, res) => {
+            if (arr.includes(t1) && arr.includes(t2)) {
+                arr = arr.filter(t => t !== t1 && t !== t2); arr.push(res);
+            } return arr;
+        };
+
+        searchTerms = joinTerms(searchTerms, 'стекло', 'камера', 'стекло камеры');
+        searchTerms = joinTerms(searchTerms, 'основная', 'камера', 'основная камера');
+        searchTerms = joinTerms(searchTerms, 'фронтальная', 'камера', 'фронтальная камера');
+        searchTerms = joinTerms(searchTerms, 'задняя', 'крышка', 'задняя крышка');
+        searchTerms = joinTerms(searchTerms, 'разъем', 'зарядки', 'разъем зарядки');
+        searchTerms = joinTerms(searchTerms, 'слуховой', 'динамик', 'слуховой динамик');
+        searchTerms = joinTerms(searchTerms, 'динамик', 'полифонический', 'динамик полифонический');
+
+        return searchTerms;
+    }
+
+    function calculate(item, isSelected) {
+        const m = isSelected ? (parseFloat(document.getElementById('markupInput').value) || 0) : 0;
+        const d = isSelected ? (parseFloat(document.getElementById('discountInput').value) || 0) : 0;
+        
+        const pInput = document.getElementById('promoInput');
+        const enteredCode = pInput.value.toUpperCase();
+        let partnerPercentage = 50; 
+        
+        if (isSelected && promos.hasOwnProperty(enteredCode)) {
+            pInput.classList.add('valid-code'); 
+            partnerPercentage += promos[enteredCode]; 
+        } else if (isSelected) {
+            pInput.classList.remove('valid-code');
+        }
+
+        const client = item.baseCP + m - d;
+        const profit = client - item.basePC - DELIVERY_COST;
+        const share = Math.round(profit * (partnerPercentage / 100));
+        const baseShare = Math.round(item.baseProfit * 0.5);
+
+        let status = 'normal';
+        if (isSelected) {
+            if (share > baseShare) status = 'azart';
+            else if (share < baseShare) status = 'trauma';
+        }
+        return { share, client, status, math: `${client}-${item.basePC}-${DELIVERY_COST}` };
+    }
+
+    function refresh() {
+        const q = document.getElementById('searchInput').value;
+        const root = document.getElementById('content-root');
+        
+        if (q.length < 2) { 
+            root.innerHTML = '<div class="empty-state">Введите бренд, модель и деталь<br>База адаптирована к рынку 2026 года</div>'; 
+            activeId = null; 
+            updateSubmitButton();
+            return; 
+        }
+        
+        const terms = parseQuery(q);
+        
+        let filtered = database.filter(item => {
+            const matchAll = terms.every(t => item.searchStr.includes(t));
+            
+            // Строгая фильтрация 
+            if (isStrict) {
+                const isPro = terms.some(t => t === 'pro');
+                const isMax = terms.some(t => t === 'max');
+                const isPlus = terms.some(t => t === 'plus');
+                const isMini = terms.some(t => t === 'mini');
+                const mdl = item.model.toLowerCase();
+                
+                if (isMax && !mdl.includes('max')) return false;
+                if (isPlus && !mdl.includes('plus')) return false;
+                if (isMini && !mdl.includes('mini')) return false;
+                if (isPro && !isMax && mdl.includes('max')) return false;
+                if (isPro && !mdl.includes('pro')) return false;
+                if (!isPro && !isMax && !isPlus && !isMini && (mdl.includes('pro') || mdl.includes('max') || mdl.includes('plus') || mdl.includes('mini'))) return false;
+            }
+            return matchAll;
+        });
+
+        if (filtered.length === 0) {
+            root.innerHTML = '<div class="empty-state">Ничего не найдено.<br>Попробуйте другие слова.</div>';
+            updateSubmitButton();
+            return;
+        }
+
+        root.innerHTML = filtered.map(i => {
+            const res = calculate(i, i.id === activeId);
+            const old = history.get(i.id) || res.share;
+            const diff = res.share - old;
+            history.set(i.id, res.share);
+            
+            const mood = res.status === 'trauma' ? 'status-trauma' : (res.status === 'azart' ? 'status-azart' : '');
+            
+            return `
+                <div class="card ${i.id === activeId ? 'is-selected' : ''} ${mood}" onclick="sel('${i.id}')">
+                    <div class="model-header">
+                        <div>
+                            <div class="model-name">${i.model}</div>
+                            <div class="service-type">${i.repair} (${i.quality})</div>
+                        </div>
+                        <div class="client-box">
+                            <div class="client-label">Клиенту</div>
+                            <div class="client-price">${res.client} ₴</div>
+                        </div>
+                    </div>
+                    <div class="limits-row">Лимиты: <span style="color:var(--apple-green)">+${i.maxM}</span> / <span style="color:var(--apple-red)">-${i.maxD}</span></div>
+                    <div class="price-footer">
+                        <div class="formula">${res.math}</div>
+                        <div class="profit-display">
+                            ${diff !== 0 && i.id === activeId ? `<span class="fly-val" style="color:${diff>0?'var(--apple-green)':'var(--apple-red)'}">${diff>0?'+':''}${diff}</span>` : ''}
+                            ${res.share} ₴
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        updateSubmitButton();
+    }
+
+    window.sel = (id) => {
+        if (activeId !== id) {
+            document.getElementById('markupInput').value = '';
+            document.getElementById('discountInput').value = '';
+            activeId = id;
+        } else activeId = null;
+        refresh();
+    };
+
+    // ==========================================
+    // 4. ОТПРАВКА ЗАКАЗА НА СЕРВЕР
+    // ==========================================
+    const submitBtn = document.getElementById('submitOrderBtn');
+
+    function updateSubmitButton() {
+        if (activeId) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Подтвердить заказ';
+            submitBtn.classList.remove('success');
+        } else {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Выберите деталь';
+        }
+    }
+
+    submitBtn.addEventListener('click', async () => {
+        if (!activeId) return;
+
+        const selectedItem = database.find(i => i.id === activeId);
+        const calcRes = calculate(selectedItem, true);
+        const m = document.getElementById('markupInput').value || 0;
+        const d = document.getElementById('discountInput').value || 0;
+        const p = document.getElementById('promoInput').value || '';
+
+        const orderData = {
+            brand: selectedItem.brand, model: selectedItem.model,
+            repair: selectedItem.repair, quality: selectedItem.quality,
+            clientPrice: calcRes.client, partnerShare: calcRes.share,
+            markup: m, discount: d, promoCode: p
+        };
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Отправка...';
+
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(orderData)
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                submitBtn.textContent = 'Успешно отправлено!';
+                submitBtn.classList.add('success');
+                
+                setTimeout(() => {
+                    activeId = null;
+                    document.getElementById('markupInput').value = '';
+                    document.getElementById('discountInput').value = '';
+                    document.getElementById('promoInput').value = '';
+                    refresh();
+                }, 2000);
+            } else {
+                throw new Error('Server error');
+            }
+        } catch (error) {
+            submitBtn.textContent = 'Ошибка! Попробуйте еще раз';
+            submitBtn.disabled = false;
+            setTimeout(updateSubmitButton, 3000);
+        }
+    });
+
+    // ==========================================
+    // 5. ИНТЕРФЕЙС И ФИЗИКА
+    // ==========================================
+    const wrapper = document.getElementById('rubber-wrapper');
+    const viewport = document.getElementById('viewport');
+    let sY = 0;
+    viewport.addEventListener('touchstart', (e) => { sY = e.touches[0].pageY; wrapper.style.transition = 'none'; }, { passive: true });
+    viewport.addEventListener('touchmove', (e) => {
+        const d = e.touches[0].pageY - sY;
+        const sc = viewport.scrollTop;
+        if ((sc <= 0 && d > 0) || (sc >= viewport.scrollHeight - viewport.clientHeight - 1 && d < 0)) {
+            wrapper.style.transform = `translateY(${d * 0.4}px)`;
+        }
+    }, { passive: true });
+    viewport.addEventListener('touchend', () => {
+        wrapper.style.transition = 'transform 0.5s cubic-bezier(0.15, 0.85, 0.35, 1.2)';
+        wrapper.style.transform = 'translateY(0px)';
+    });
+
+    document.getElementById('themeToggle').addEventListener('click', () => {
+        const d = document.body.getAttribute('data-theme') === 'dark';
+        document.body.setAttribute('data-theme', d ? 'light' : 'dark');
+        document.getElementById('themeIcon').innerHTML = d 
+            ? '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>'
+            : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+    });
+
+    initApp();
+</script>
+</body>
+</html>
