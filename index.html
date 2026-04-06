@@ -161,8 +161,7 @@
     // ==========================================
     // 1. КОНФИГУРАЦИЯ СИСТЕМЫ
     // ==========================================
-    // ВСТАВЬ СВОЙ URL ИЗ GOOGLE APPS SCRIPT СЮДА:
-    const API_URL = 'https://script.google.com/macros/s/AKfycbwsJhUL9YCTooUWeuTgnaMUESbf4pzsuBVSSXdDxLQUbSa6aEZJhK55dq0RgEViBVVCZQ/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwiQ0bFfT796-f6O-voBLY2AyWCmTGXXlHSqzX4TQsiPr2SASktvzX2_If765viSOWlGQ/exec';
     
     const USD_CURRENT = 41.5; 
     const USD_BASE = 38.0;    
@@ -200,7 +199,7 @@
             ['markupInput', 'discountInput', 'promoInput'].forEach(id => document.getElementById(id).addEventListener('input', refresh));
 
         } catch (error) {
-            root.innerHTML = '<div class="empty-state" style="color: var(--apple-red);">Ошибка подключения к базе.<br>Проверьте URL скрипта.</div>';
+            root.innerHTML = '<div class="empty-state" style="color: var(--apple-red);">Ошибка подключения к базе.<br>Проверьте деплой в Google.</div>';
             console.error('API Error:', error);
         }
     }
@@ -306,7 +305,6 @@
         let filtered = database.filter(item => {
             const matchAll = terms.every(t => item.searchStr.includes(t));
             
-            // Строгая фильтрация 
             if (isStrict) {
                 const isPro = terms.some(t => t === 'pro');
                 const isMax = terms.some(t => t === 'max');
@@ -335,7 +333,6 @@
             const old = history.get(i.id) || res.share;
             const diff = res.share - old;
             history.set(i.id, res.share);
-            
             const mood = res.status === 'trauma' ? 'status-trauma' : (res.status === 'azart' ? 'status-azart' : '');
             
             return `
@@ -375,7 +372,7 @@
     };
 
     // ==========================================
-    // 4. ОТПРАВКА ЗАКАЗА НА СЕРВЕР
+    // 4. ЖЕЛЕЗОБЕТОННАЯ ОТПРАВКА (GET ACTION)
     // ==========================================
     const submitBtn = document.getElementById('submitOrderBtn');
 
@@ -399,23 +396,26 @@
         const d = document.getElementById('discountInput').value || 0;
         const p = document.getElementById('promoInput').value || '';
 
-        const orderData = {
-            brand: selectedItem.brand, model: selectedItem.model,
-            repair: selectedItem.repair, quality: selectedItem.quality,
-            clientPrice: calcRes.client, partnerShare: calcRes.share,
-            markup: m, discount: d, promoCode: p
-        };
+        // Передаем данные через параметры строки (action=order)
+        const params = new URLSearchParams({
+            action: 'order',
+            brand: selectedItem.brand,
+            model: selectedItem.model,
+            repair: selectedItem.repair,
+            quality: selectedItem.quality,
+            clientPrice: calcRes.client,
+            partnerShare: calcRes.share,
+            markup: m,
+            discount: d,
+            promoCode: p
+        });
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Отправка...';
 
         try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(orderData)
-            });
-
+            // Отправляем как GET-запрос — это обходит 90% ошибок POST
+            const response = await fetch(`${API_URL}?${params.toString()}`);
             const result = await response.json();
 
             if (result.status === 'success') {
@@ -433,7 +433,7 @@
                 throw new Error('Server error');
             }
         } catch (error) {
-            submitBtn.textContent = 'Ошибка! Попробуйте еще раз';
+            submitBtn.textContent = 'Ошибка! Проверьте таблицу';
             submitBtn.disabled = false;
             setTimeout(updateSubmitButton, 3000);
         }
